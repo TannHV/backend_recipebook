@@ -32,6 +32,14 @@ export default class UserDAO {
         const userId = id.toString();
         return db.collection(USER_COLLECTION).findOne({ _id: new ObjectId(userId) });
     }
+    
+    static async findUserSafeById(id) {
+        const db = getDB();
+        return db.collection(USER_COLLECTION).findOne(
+            { _id: new ObjectId(id) },
+            { projection: { password: 0 } } // loại password
+        );
+    }
 
     static async findByEmailOrUsername({ email, username }) {
         const db = getDB();

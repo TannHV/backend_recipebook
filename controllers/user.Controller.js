@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import UserDAO from "../DAO/userDAO.js";
+import UserDAO from "../dao/userDAO.js";
 import { validateEmail } from "../utils/validateEmail.js";
 import { validatePasswordStrength } from "../utils/passwordUtils.js";
 import { deleteCloudinaryFile } from "../utils/cloudinaryUtils.js";
@@ -208,7 +208,7 @@ const userController = {
             }
 
             // Cập nhật avatar mới
-            const updatedUser = await UserDAO.updateUser(req.user.id, {
+            const updatedUser = await UserDAO.updateUser(req.user._id, {
                 avatar: newAvatarUrl,
             });
 
