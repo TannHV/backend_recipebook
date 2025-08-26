@@ -24,7 +24,7 @@ const blogController = {
                 title,
                 content: sanitized,
                 thumbnail,
-                author: req.user._id,
+                author: req.user._id ?? req.user.id,
             });
 
             res.status(201).json({ message: "Tạo blog thành công", blog: newBlog });
@@ -134,7 +134,7 @@ const blogController = {
             }
 
             const updatedBlog = await BlogDAO.addComment(blogId, {
-                user: req.user._id,
+                user: req.user._id ?? req.user.id,
                 content,
             });
 

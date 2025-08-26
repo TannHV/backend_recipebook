@@ -16,11 +16,10 @@ class Database {
         if (this._connecting) return this._connecting; // đang kết nối
 
         const uri = process.env.MONGO_URI;
-        // Hỗ trợ cả DB_NAME và BD_NAME (nếu bạn đang dùng BD_NAME cũ)
-        const dbName = process.env.DB_NAME || process.env.BD_NAME;
+        const dbName = process.env.DB_NAME;
 
         if (!uri) throw new Error('MONGO_URI is required');
-        if (!dbName) throw new Error('DB_NAME (hoặc BD_NAME) is required');
+        if (!dbName) throw new Error('DB_NAME is required');
 
         const options = {
             // Các option hợp lệ cho MongoDB driver

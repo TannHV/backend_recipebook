@@ -134,11 +134,11 @@ const userController = {
     // Xem thông tin cá nhân
     async getProfile(req, res) {
         try {
-            const user = await UserDAO.findUserById(req.user._id);
+            const user = await UserDAO.findUserById(req.user._id ?? req.user.id);
             if (!user) return res.status(404).json({ message: "Người dùng không tồn tại" });
 
             return res.json({
-                id: user._id,
+                id: user.id,
                 username: user.username,
                 email: user.email,
                 avatar: user.avatar,
@@ -168,16 +168,21 @@ const userController = {
 
             if (email) {
                 const existing = await UserDAO.findUserByEmail(email);
-                if (existing && existing._id.toString() != req.user._id) {
+                if (existing && existing._id != req.user.id) {
                     return res.status(400).json({ message: "Email đã được sử dụng bởi tài khoản khác" });
                 }
             }
+            const userId = req.user?._id ?? req.user?.id;
 
-            const updated = await UserDAO.updateUser(req.user._id, {
+
+            const updated = await UserDAO.updateUser(userId, {
                 email,
                 fullname,
                 updatedAt: Date.now(),
             });
+
+            if (!updated) return res.status(404).json({ message: "Không tìm thấy người dùng" });
+
             res.json({ message: "Cập nhật thông tin thành công", user: updated });
         } catch (err) {
             console.error("Update Info error:", err);
@@ -196,11 +201,10 @@ const userController = {
             const newAvatarUrl = req.file.path;
 
             // Lấy user hiện tại
-            const user = await UserDAO.findUserById(req.user._id);
+            const user = await UserDAO.findUserById(req.user._id ?? req.user.id);
             if (!user) {
                 return res.status(404).json({ message: "Không tìm thấy người dùng" });
             }
-
 
             // Xóa avatar cũ nếu không phải default
             if (user.avatar && user.avatar !== DEFAULT_AVATAR_URL) {
@@ -208,7 +212,7 @@ const userController = {
             }
 
             // Cập nhật avatar mới
-            const updatedUser = await UserDAO.updateUser(req.user._id, {
+            const updatedUser = await UserDAO.updateUser(req.user._id ?? req.user.id, {
                 avatar: newAvatarUrl,
             });
 
@@ -230,7 +234,7 @@ const userController = {
     async changePassword(req, res) {
         try {
             const { oldPassword, newPassword, confirmPassword } = req.body;
-            const user = await UserDAO.findByIdWithPassword(req.user._id);
+            const user = await UserDAO.findByIdWithPassword(req.user._id ?? req.user.id);
 
             const isMatch = await bcrypt.compare(oldPassword, user.password);
             if (!isMatch) return res.status(400).json({ message: "Mật khẩu cũ không đúng" });

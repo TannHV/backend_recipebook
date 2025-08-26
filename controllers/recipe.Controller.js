@@ -48,7 +48,7 @@ const recipeController = {
                 servings,
                 tags,
                 thumbnail,
-                createdBy: req.user._id,
+                createdBy: req.user._id ?? req.user.id,
             });
 
             res.status(201).json({ message: 'Tạo công thức thành công', recipe });
@@ -101,7 +101,7 @@ const recipeController = {
 
             // chỉ author hoặc admin được sửa
             if (req.user.role !== 'admin' &&
-                String(existing.createdBy) !== String(req.user._id)) {
+                String(existing.createdBy) !== String(req.user._id ?? req.user.id)) {
                 return res.status(403).json({ message: 'Không có quyền sửa công thức này' });
             }
 
@@ -142,7 +142,7 @@ const recipeController = {
             if (!existing) return res.status(404).json({ message: 'Không tìm thấy công thức' });
 
             if (req.user.role !== 'admin' &&
-                String(existing.createdBy) !== String(req.user._id)) {
+                String(existing.createdBy) !== String(req.user._id ?? req.user.id)) {
                 return res.status(403).json({ message: 'Không có quyền xóa công thức này' });
             }
 
@@ -157,11 +157,11 @@ const recipeController = {
     // interactions
     async toggleLike(req, res) {
         try {
-            const r = await RecipeDAO.toggleLike(req.params.id, req.user._id);
+            const r = await RecipeDAO.toggleLike(req.params.id, req.user._id ?? req.user.id);
             if (!r) return res.status(404).json({ message: 'Không tìm thấy công thức' });
             return res.json({
                 message: 'OK', likes: r.likes?.length || 0, liked:
-                    (r.likes || []).some(x => String(x) === String(req.user._id))
+                    (r.likes || []).some(x => String(x) === String(req.user._id ?? req.user.id))
             });
         } catch (err) {
             console.error('Toggle like error:', err);
@@ -179,7 +179,7 @@ const recipeController = {
             }
 
             const r = await RecipeDAO.rate(req.params.id, {
-                user: req.user._id,
+                user: req.user._id ?? req.user.id,
                 stars: starsNum,
                 comment,
             });
@@ -189,7 +189,7 @@ const recipeController = {
             const ratings = r.ratings || [];
             const count = ratings.length;
             const avg = count ? Number((ratings.reduce((s, x) => s + Number(x.stars || 0), 0) / count).toFixed(2)) : 0;
-            const my = ratings.find(x => String(x.user) === String(req.user._id));
+            const my = ratings.find(x => String(x.user) === String(req.user._id ?? req.user.id));
 
             return res.json({
                 message: 'Đánh giá thành công',
@@ -205,7 +205,7 @@ const recipeController = {
 
     async userDeleteRating(req, res) {
         try {
-            const r = await RecipeDAO.deleteRating(req.params.id, req.user._id, req.user);
+            const r = await RecipeDAO.deleteRating(req.params.id, req.user._id ?? req.user.id, req.user);
             if (!r) return res.status(404).json({ message: 'Không tìm thấy công thức hoặc không có rating để xóa' });
 
             const ratings = r.ratings || [];
@@ -246,7 +246,7 @@ const recipeController = {
                 return res.status(400).json({ message: 'Nội dung bình luận không được trống' });
             }
 
-            const r = await RecipeDAO.addComment(req.params.id, { user: req.user._id, content });
+            const r = await RecipeDAO.addComment(req.params.id, { user: req.user._id ?? req.user.id, content });
             if (!r) return res.status(404).json({ message: 'Không tìm thấy công thức' });
 
             res.json({ message: 'Đã thêm bình luận', comments: r });
@@ -267,7 +267,7 @@ const recipeController = {
             if (!target) return res.status(404).json({ message: 'Không tìm thấy bình luận' });
 
             // Chỉ chính chủ hoặc admin được xóa
-            if (req.user.role !== 'admin' && String(target.user) !== String(req.user._id)) {
+            if (req.user.role !== 'admin' && String(target.user) !== String(req.user._id ?? req.user.id)) {
                 return res.status(403).json({ message: 'Không có quyền xóa bình luận này' });
             }
 
@@ -283,10 +283,11 @@ const recipeController = {
         try {
             const { id, commentId } = req.params;
 
+
             const recipe = await RecipeDAO.getById(id);
             if (!recipe) return res.status(404).json({ message: 'Không tìm thấy công thức' });
 
-            if (req.user.role !== 'admin' && String(recipe.createdBy) !== String(req.user._id)) {
+            if (req.user.role !== 'admin' && String(recipe.createdBy) !== String(req.user._id ?? req.user.id)) {
                 return res.status(403).json({ message: 'Không có quyền xóa bình luận này' });
             }
 
@@ -303,7 +304,7 @@ const recipeController = {
         try {
             const r = await RecipeDAO.hide(req.params.id, true);
             if (!r) return res.status(404).json({ message: 'Không tìm thấy công thức' });
-            res.json({ message: 'Đã ẩn công thức' , recipe_status: r.isHidden });
+            res.json({ message: 'Đã ẩn công thức', recipe_status: r.isHidden });
         } catch (err) {
             console.error('Hide recipe error:', err);
             res.status(500).json({ message: 'Lỗi ẩn công thức' });
@@ -314,7 +315,7 @@ const recipeController = {
         try {
             const r = await RecipeDAO.hide(req.params.id, false);
             if (!r) return res.status(404).json({ message: 'Không tìm thấy công thức' });
-            res.json({ message: 'Đã bỏ ẩn công thức' , recipe_status: r.isHidden });
+            res.json({ message: 'Đã bỏ ẩn công thức', recipe_status: r.isHidden });
         } catch (err) {
             console.error('Unhide recipe error:', err);
             res.status(500).json({ message: 'Lỗi bỏ ẩn công thức' });

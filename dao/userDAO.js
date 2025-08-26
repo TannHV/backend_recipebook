@@ -32,7 +32,7 @@ export default class UserDAO {
         const userId = id.toString();
         return db.collection(USER_COLLECTION).findOne({ _id: new ObjectId(userId) });
     }
-    
+
     static async findUserSafeById(id) {
         const db = getDB();
         return db.collection(USER_COLLECTION).findOne(
@@ -60,17 +60,15 @@ export default class UserDAO {
     static async updateUser(id, updateData) {
         const db = getDB();
         const userId = id.toString();
-        const result = await db
-            .collection(USER_COLLECTION)
-            .findOneAndUpdate(
-                { _id: new ObjectId(userId) },
-                { $set: { ...updateData, updatedAt: new Date() } },
-                { returnDocument: 'after' }
-            );
 
-        if (!result || !result.value) return null; // tránh destructure null
+        const r = await db.collection(USER_COLLECTION).findOneAndUpdate(
+            { _id: new ObjectId(userId) },
+            { $set: { ...updateData, updatedAt: new Date() } },
+            { returnDocument: 'after', projection: { password: 0 } }
+        );
 
-        return result.value;
+        const doc = r && ('value' in r ? r.value : r);
+        return doc ?? null;
     }
 
     static async deleteUser(id) {
