@@ -4,321 +4,257 @@ import { validateEmail } from "../utils/validateEmail.js";
 import { validatePasswordStrength } from "../utils/passwordUtils.js";
 import { deleteCloudinaryFile } from "../utils/cloudinaryUtils.js";
 import { generateToken } from "../config/jwt.js";
-
-const DEFAULT_AVATAR_URL = 'https://res.cloudinary.com/couldimagerecipebe/image/upload/v1753875465/avatar_default.png';
+import { AppError, catchAsync } from "../utils/error.js";
 
 const userController = {
 
     // Đăng ký tài khoản
-    async register(req, res) {
-        try {
-            const { username, email, password, confirmPassword, fullname } = req.body;
+    register: catchAsync(async (req, res, next) => {
+        const { username, email, password, confirmPassword, fullname } = req.body;
 
-            // Kiểm tra người dùng nhâp đày đủ thông tin bắt buộc
-            if (!username || !email || !password || !confirmPassword || !fullname) {
-                return res
-                    .status(400)
-                    .json({ message: "Vui lòng điền đầy đủ thông tin bắt buộc" });
-            }
-
-            // Kiểm tra username đã tồn tại
-            const existingUserName = await UserDAO.findUserByUsername(username);
-            if (existingUserName) {
-                return res.status(400).json({ message: "Username đã được sử dụng" });
-            }
-
-            // Kiểm tra email hợp lệ
-            if (!validateEmail(email)) {
-                return res.status(400).json({ message: "Email không hợp lệ" });
-            }
-
-            // Kiểm tra email đã tồn tại
-            const existingUser = await UserDAO.findUserByEmail(email);
-            if (existingUser) {
-                return res.status(400).json({ message: "Email đã được sử dụng" });
-            }
-
-            // Kiểm tra password khớp confirmPassword
-            if (password !== confirmPassword) {
-                return res
-                    .status(400)
-                    .json({ message: "Mật khẩu xác nhận không khớp" });
-            }
-
-            // Kiểm tra độ mạnh mật khẩu
-            if (!validatePasswordStrength(password)) {
-                return res.status(400).json({ message: "Mật khẩu phải tối thiểu 8 ký tự, có chữ hoa, chữ thường và số" });
-            }
-
-            // Hash mật khẩu
-            const hashedPassword = await bcrypt.hash(password, 10);
-
-            const newUser = await UserDAO.createUser({
-                username,
-                email,
-                password: hashedPassword,
-                fullname,
-                avatar: DEFAULT_AVATAR_URL
-            });
-
-            const token = generateToken({ id: newUser._id, role: newUser.role });
-
-            res.status(201).json({
-                message: "Đăng ký thành công",
-                token,
-                user: {
-                    id: newUser._id,
-                    username: newUser.username,
-                    email: newUser.email,
-                    fullname: newUser.fullname,
-                },
-            });
-        } catch (err) {
-            res.status(500).json({ message: "Đăng ký thất bại", error: err.message });
+        if (!username || !email || !password || !confirmPassword || !fullname) {
+            return next(new AppError("Vui lòng điền đầy đủ thông tin bắt buộc", 400));
         }
-    },
+
+        const existingUserName = await UserDAO.findUserByUsername(username);
+        if (existingUserName) {
+            return next(new AppError("Username đã được sử dụng", 400));
+        }
+
+        if (!validateEmail(email)) {
+            return next(new AppError("Email không hợp lệ", 400));
+        }
+
+        const existingUser = await UserDAO.findUserByEmail(email);
+        if (existingUser) {
+            return next(new AppError("Email đã được sử dụng", 400));
+        }
+
+        if (password !== confirmPassword) {
+            return next(new AppError("Mật khẩu xác nhận không khớp", 400));
+        }
+
+        if (!validatePasswordStrength(password)) {
+            return next(new AppError("Mật khẩu phải tối thiểu 8 ký tự, có chữ hoa, chữ thường và số", 400)
+            );
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        const newUser = await UserDAO.createUser({
+            username,
+            email,
+            password: hashedPassword,
+            fullname,
+            avatar: process.env.DEFAULT_AVATAR_URL,
+        });
+
+        const token = generateToken({ id: newUser._id, role: newUser.role });
+
+        res.status(201).json({
+            message: "Đăng ký thành công",
+            token,
+            user: {
+                id: newUser._id,
+                username: newUser.username,
+                email: newUser.email,
+                fullname: newUser.fullname,
+            },
+        });
+    }),
 
     // Đăng nhập
-    async login(req, res) {
-        try {
-            const { identifier, password } = req.body;
+    login: catchAsync(async (req, res, next) => {
+        const { identifier, password } = req.body;
 
-            // Kiểm tra người dùng nhập đầy đủ thông tin
-            if (!identifier || !password) {
-                return res
-                    .status(400)
-                    .json({ message: "Vui lòng điền đầy đủ thông tin" });
-            }
-
-            // Tìm theo email hoặc username
-            const user = await UserDAO.findByEmailOrUsername({
-                email: identifier,
-                username: identifier,
-            });
-
-
-            if (!user) {
-                return res.status(400).json({ message: "Tài khoản không tồn tại" });
-            }
-
-            const isMatch = await bcrypt.compare(password, user.password);
-            if (!isMatch) {
-                return res.status(400).json({ message: "Mật khẩu không đúng" });
-            }
-
-            if (user.status === "blocked") {
-                return res.status(403).json({ message: "Tài khoản của bạn đã bị khóa" });
-            }
-
-            const token = generateToken({ id: user._id, role: user.role });
-
-            return res.json({
-                message: "Đăng nhập thành công",
-                token,
-                user: {
-                    id: user._id,
-                    username: user.username,
-                    email: user.email,
-                    avatar: user.avatar,
-                    fullname: user.fullname,
-                    role: user.role,
-                },
-            });
-        } catch (err) {
-            res
-                .status(500)
-                .json({ message: "Đăng nhập thất bại", error: err.message });
+        if (!identifier || !password) {
+            return next(new AppError("Vui lòng điền đầy đủ thông tin", 400));
         }
-    },
 
-    // Xem thông tin cá nhân
-    async getProfile(req, res) {
-        try {
-            const user = await UserDAO.findUserById(req.user._id ?? req.user.id);
-            if (!user) return res.status(404).json({ message: "Người dùng không tồn tại" });
+        const user = await UserDAO.findByEmailOrUsername({
+            email: identifier,
+            username: identifier,
+        });
 
-            return res.json({
-                id: user.id,
+        if (!user) {
+            return next(new AppError("Tài khoản không tồn tại", 404));
+        }
+
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch) {
+            return next(new AppError("Mật khẩu không đúng", 400));
+        }
+
+        if (user.status === "blocked") {
+            return next(new AppError("Tài khoản của bạn đã bị khóa", 403));
+        }
+
+        const token = generateToken({ id: user._id, role: user.role });
+
+        res.json({
+            message: "Đăng nhập thành công",
+            token,
+            user: {
+                id: user._id,
                 username: user.username,
                 email: user.email,
                 avatar: user.avatar,
                 fullname: user.fullname,
                 role: user.role,
-            });
-        } catch (err) {
-            console.error("Profile error:", err);
-            res.status(500).json({ message: "Lỗi khi lấy thông tin người dùng" });
+            },
+        });
+    }),
+
+    // Xem thông tin cá nhân
+    getProfile: catchAsync(async (req, res, next) => {
+        const user = await UserDAO.findUserById(req.user._id ?? req.user.id);
+        if (!user) return next(new AppError("Người dùng không tồn tại", 404));
+
+        res.json({
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            avatar: user.avatar,
+            fullname: user.fullname,
+            role: user.role,
+        });
+    }),
+
+    // Cập nhật thông tin
+    updateInfo: catchAsync(async (req, res, next) => {
+        const { email, fullname } = req.body;
+
+        if (!email || !fullname) {
+            return next(new AppError("Email và họ tên là thông tin bắt buộc", 400));
         }
-    },
 
-    // Update thông tin user
-    async updateInfo(req, res) {
-        try {
-            const { email, fullname } = req.body;
-
-            if (!email || !fullname) {
-                return res
-                    .status(400)
-                    .json({ message: "Email và họ tên là thông tin bắt buộc" });
-            }
-
-            if (!validateEmail(email)) {
-                return res.status(400).json({ message: "Email không hợp lệ" });
-            }
-
-            if (email) {
-                const existing = await UserDAO.findUserByEmail(email);
-                if (existing && existing._id != req.user.id) {
-                    return res.status(400).json({ message: "Email đã được sử dụng bởi tài khoản khác" });
-                }
-            }
-            const userId = req.user?._id ?? req.user?.id;
-
-
-            const updated = await UserDAO.updateUser(userId, {
-                email,
-                fullname,
-                updatedAt: Date.now(),
-            });
-
-            if (!updated) return res.status(404).json({ message: "Không tìm thấy người dùng" });
-
-            res.json({ message: "Cập nhật thông tin thành công", user: updated });
-        } catch (err) {
-            console.error("Update Info error:", err);
-            res.status(500).json({ message: "Lỗi khi cập nhật thông tin" });
+        if (!validateEmail(email)) {
+            return next(new AppError("Email không hợp lệ", 400));
         }
-    },
 
-    //Upload avatar
-    async uploadAvatar(req, res) {
-        try {
-            // Kiểm tra có file hay không
-            if (!req.file || !req.file.path) {
-                return res.status(400).json({ message: "Không có ảnh được tải lên" });
+        if (email) {
+            const existing = await UserDAO.findUserByEmail(email);
+            if (existing && String(existing._id) !== String(req.user._id ?? req.user.id)) {
+                return next(
+                    new AppError("Email đã được sử dụng bởi tài khoản khác", 400)
+                );
             }
-
-            const newAvatarUrl = req.file.path;
-
-            // Lấy user hiện tại
-            const user = await UserDAO.findUserById(req.user._id ?? req.user.id);
-            if (!user) {
-                return res.status(404).json({ message: "Không tìm thấy người dùng" });
-            }
-
-            // Xóa avatar cũ nếu không phải default
-            if (user.avatar && user.avatar !== DEFAULT_AVATAR_URL) {
-                await deleteCloudinaryFile(user.avatar);
-            }
-
-            // Cập nhật avatar mới
-            const updatedUser = await UserDAO.updateUser(req.user._id ?? req.user.id, {
-                avatar: newAvatarUrl,
-            });
-
-            res.json({
-                message: "Cập nhật avatar thành công",
-                avatar: newAvatarUrl,
-                user: updatedUser,
-            });
-            if (!updatedUser) {
-                return res.status(500).json({ message: "Không thể cập nhật avatar" });
-            }
-        } catch (err) {
-            console.error("Update avatar error:", err);
-            res.status(500).json({ message: "Lỗi khi cập nhật avatar" });
         }
-    },
+
+        const userId = req.user?._id ?? req.user?.id;
+
+        const updated = await UserDAO.updateUser(userId, {
+            email,
+            fullname,
+            updatedAt: Date.now(),
+        });
+
+        if (!updated) return next(new AppError("Không tìm thấy người dùng", 404));
+
+        res.json({ message: "Cập nhật thông tin thành công", user: updated });
+    }),
+
+    // Upload avatar
+    uploadAvatar: catchAsync(async (req, res, next) => {
+        if (!req.file || !req.file.path) {
+            return next(new AppError("Không có ảnh được tải lên", 400));
+        }
+
+        const newAvatarUrl = req.file.path;
+
+        const user = await UserDAO.findUserById(req.user._id ?? req.user.id);
+        if (!user) return next(new AppError("Không tìm thấy người dùng", 404));
+
+        // Xóa avatar cũ nếu không phải default
+        if (user.avatar && user.avatar !== process.env.DEFAULT_AVATAR_URL) {
+            await deleteCloudinaryFile(user.avatar);
+        }
+
+        const updatedUser = await UserDAO.updateUser(req.user._id ?? req.user.id, {
+            avatar: newAvatarUrl,
+            updatedAt: Date.now(),
+        });
+
+        if (!updatedUser) {
+            return next(new AppError("Không thể cập nhật avatar", 500));
+        }
+
+        res.json({
+            message: "Cập nhật avatar thành công",
+            avatar: newAvatarUrl,
+            user: updatedUser,
+        });
+    }),
 
     // Đổi mật khẩu
-    async changePassword(req, res) {
-        try {
-            const { oldPassword, newPassword, confirmPassword } = req.body;
-            const user = await UserDAO.findByIdWithPassword(req.user._id ?? req.user.id);
+    changePassword: catchAsync(async (req, res, next) => {
+        const { oldPassword, newPassword, confirmPassword } = req.body;
+        const userId = req.user._id ?? req.user.id;
 
-            const isMatch = await bcrypt.compare(oldPassword, user.password);
-            if (!isMatch) return res.status(400).json({ message: "Mật khẩu cũ không đúng" });
+        const user = await UserDAO.findByIdWithPassword(userId);
+        if (!user) return next(new AppError("Không tìm thấy người dùng", 404));
 
-            if (newPassword !== confirmPassword) {
-                return res.status(400).json({ message: "Mật khẩu xác nhận không khớp" });
-            }
+        const isMatch = await bcrypt.compare(oldPassword, user.password);
+        if (!isMatch) return next(new AppError("Mật khẩu cũ không đúng", 400));
 
-            if (!validatePasswordStrength(newPassword)) {
-                return res.status(400).json({ message: "Mật khẩu mới không đủ mạnh" });
-            }
-
-            const hashed = await bcrypt.hash(newPassword, 10);
-            await UserDAO.updateUser(req.user.id, { password: hashed });
-            res.json({ message: "Đổi mật khẩu thành công" });
-        } catch (err) {
-            console.error("Change password error:", err);
-            res.status(500).json({ message: "Lỗi khi đổi mật khẩu" });
+        if (newPassword !== confirmPassword) {
+            return next(new AppError("Mật khẩu xác nhận không khớp", 400));
         }
-    },
+
+        if (!validatePasswordStrength(newPassword)) {
+            return next(new AppError("Mật khẩu mới không đủ mạnh", 400));
+        }
+
+        const hashed = await bcrypt.hash(newPassword, 10);
+        await UserDAO.updateUser(userId, { password: hashed, updatedAt: Date.now() });
+
+        res.json({ message: "Đổi mật khẩu thành công" });
+    }),
 
     // Lấy tất cả tài khoản
-    async getAllUsers(req, res) {
-        try {
-            const users = await UserDAO.getAllUsers();
-            res.json(users);
-        } catch (err) {
-            res.status(500).json({ message: "Lỗi khi lấy danh sách người dùng" });
+    getAllUsers: catchAsync(async (req, res, next) => {
+        const users = await UserDAO.getAllUsers();
+        res.json(users);
+    }),
+
+    // Lấy tài khoản theo id
+    getUserById: catchAsync(async (req, res, next) => {
+        const user = await UserDAO.findUserById(req.params.id);
+        if (!user) return next(new AppError("Không tìm thấy người dùng", 404));
+        res.json(user);
+    }),
+
+    // Cập nhật trạng thái tài khoản
+    updateUserStatus: catchAsync(async (req, res, next) => {
+        const { status } = req.body;
+        if (!["active", "blocked"].includes(status)) {
+            return next(new AppError("Trạng thái không hợp lệ", 400));
         }
-    },
 
-    // Lấy thông tin tài khoản theo id
-    async getUserById(req, res) {
-        try {
-            const user = await UserDAO.findUserById(req.params.id);
-            if (!user) return res.status(404).json({ message: "Không tìm thấy người dùng" });
-            res.json(user);
-        } catch (err) {
-            console.log(err);
-            res.status(500).json({ message: "Lỗi khi lấy thông tin người dùng" });
+        const updated = await UserDAO.updateUser(req.params.id, { status, updatedAt: Date.now() });
+        if (!updated) return next(new AppError("Không tìm thấy người dùng", 404));
+
+        res.json({ message: "Cập nhật trạng thái thành công", user: updated });
+    }),
+
+    // Cập nhật vai trò
+    updateUserRole: catchAsync(async (req, res, next) => {
+        const { role } = req.body;
+        if (!["user", "admin", "staff"].includes(role)) {
+            return next(new AppError("Vai trò không hợp lệ", 400));
         }
-    },
 
-    // Cập nhật tình trạng tài khoản
-    async updateUserStatus(req, res) {
-        try {
-            const { status } = req.body;
-            if (!["active", "blocked"].includes(status)) {
-                return res.status(400).json({ message: "Trạng thái không hợp lệ" });
-            }
-            const updated = await UserDAO.updateUser(req.params.id, { status });
-            res.json({ message: "Cập nhật trạng thái thành công", user: updated });
-        } catch (err) {
-            res.status(500).json({ message: "Lỗi khi cập nhật trạng thái" });
-        }
-    },
+        const updated = await UserDAO.updateUser(req.params.id, { role, updatedAt: Date.now() });
+        if (!updated) return next(new AppError("Không tìm thấy người dùng", 404));
 
-    // Cập nhật role User
-    async updateUserRole(req, res) {
-        try {
-            const { role } = req.body;
+        res.json({ message: "Cập nhật vai trò thành công", user: updated });
+    }),
 
-            if (!["user", "admin", "staff"].includes(role)) {
-                return res.status(400).json({ message: "Vai trò không hợp lệ" });
-            }
-
-            const updated = await UserDAO.updateUser(req.params.id, { role });
-            res.json({ message: "Cập nhật vai trò thành công", user: updated });
-        } catch (err) {
-            res.status(500).json({ message: "Lỗi khi cập nhật vai trò" });
-        }
-    },
-
-    // Xóa user 
-    async deleteUser(req, res) {
-        try {
-            await UserDAO.deleteUser(req.params.id);
-            res.json({ message: "Xóa người dùng thành công" });
-        } catch (err) {
-            res.status(500).json({ message: "Lỗi khi xóa người dùng" });
-        }
-    },
-
-
+    // Xóa user
+    deleteUser: catchAsync(async (req, res, next) => {
+        await UserDAO.deleteUser(req.params.id);
+        res.json({ message: "Xóa người dùng thành công" });
+    }),
 };
 
 export default userController;

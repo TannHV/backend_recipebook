@@ -1,5 +1,5 @@
 import express from "express";
-import blogController from "../controllers/blog.Controller.js";
+import blogController from "../controllers/blog.controller.js";
 import auth from "../middlewares/auth.js";
 import roleCheck from "../middlewares/roleCheck.js";
 import { uploadBlogImage } from "../middlewares/uploadImage.js";

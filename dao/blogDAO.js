@@ -1,6 +1,7 @@
 
 import { ObjectId } from 'mongodb';
 import { getDB } from '../config/db.js';
+import { toObjectId } from '../utils/mongo.js';
 import BlogModel, { BLOG_COLLECTION } from '../models/blog.model.js';
 
 const BlogDAO = {
@@ -24,33 +25,43 @@ const BlogDAO = {
     // Lấy blog theo ID
     async getBlogById(id) {
         const db = getDB();
-        const blogId = id.toString();
-        return db.collection(BLOG_COLLECTION).findOne({ _id: new ObjectId(blogId) });
+        const objectId = toObjectId(id);
+        if (!objectId) return null;
+
+        return db.collection(BLOG_COLLECTION).findOne({ _id: objectId });
     },
 
     // Cập nhật blog
     async updateBlog(id, updateData) {
         const db = getDB();
-        const blogId = id.toString();
+        const objectId = toObjectId(id);
+        if (!objectId) return null;
+
         const { value } = await db.collection(BLOG_COLLECTION).findOneAndUpdate(
-            { _id: new ObjectId(blogId) },
+            { _id: objectId },
             { $set: { ...updateData, updatedAt: new Date() } },
             { returnDocument: 'after' }
         );
-        return value;
+
+        const result = value ?? await db.collection(BLOG_COLLECTION).findOne({ _id: objectId });
+        return result;
     },
 
     // Xoá blog
     async deleteBlog(id) {
         const db = getDB();
-        const blogId = id.toString();
-        return db.collection(BLOG_COLLECTION).deleteOne({ _id: new ObjectId(blogId) });
+        const objectId = toObjectId(id);
+        if (!objectId) return null;
+
+        return db.collection(BLOG_COLLECTION).deleteOne({ _id: objectId });
     },
 
     // Thêm comment
     async addComment(id, commentData) {
         const db = getDB();
-        const blogId = id.toString();
+        const objectId = toObjectId(id);
+        if (!objectId) return null;
+
         const newComment = {
             _id: new ObjectId(),
             ...commentData,
@@ -58,7 +69,7 @@ const BlogDAO = {
         };
 
         const { value } = await db.collection(BLOG_COLLECTION).findOneAndUpdate(
-            { _id: new ObjectId(blogId) },
+            { _id: objectId },
             { $push: { comments: newComment } },
             { returnDocument: 'after' }
         );
@@ -68,10 +79,13 @@ const BlogDAO = {
     // Xoá comment
     async deleteComment(id, commentId) {
         const db = getDB();
-        const blogId = id.toString();
+        const objectId = toObjectId(id);
+        const commentObjectId = toObjectId(commentId);
+        if (!objectId || !commentObjectId) return null;
+
         const { value } = await db.collection(BLOG_COLLECTION).findOneAndUpdate(
-            { _id: new ObjectId(blogId) },
-            { $pull: { comments: { _id: new ObjectId(commentId) } } },
+            { _id: objectId },
+            { $pull: { comments: { _id: commentObjectId } } },
             { returnDocument: 'after' }
         );
         return value;

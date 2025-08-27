@@ -26,8 +26,7 @@ class Database {
             maxPoolSize: 10,                 // số kết nối trong pool
             serverSelectionTimeoutMS: 5000,  // timeout chọn server
             socketTimeoutMS: 45000,          // timeout socket
-            retryWrites: true,
-            // compressors: ['snappy'],      // bật nếu cluster hỗ trợ
+            retryWrites: true,               // tự động retry khi có lỗi
         };
 
         this.client = new MongoClient(uri, options);

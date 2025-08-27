@@ -2,6 +2,7 @@
 import { getDB } from '../config/db.js';
 import { ObjectId } from 'mongodb';
 import { USER_COLLECTION } from '../models/user.model.js';
+import { toObjectId } from '../utils/mongo.js';
 import UserModel from '../models/user.model.js';
 
 export default class UserDAO {
@@ -29,14 +30,17 @@ export default class UserDAO {
 
     static async findUserById(id) {
         const db = getDB();
-        const userId = id.toString();
-        return db.collection(USER_COLLECTION).findOne({ _id: new ObjectId(userId) });
+        const objectId = toObjectId(id);
+        if (!objectId) return null;
+        return db.collection(USER_COLLECTION).findOne({ _id: objectId });
     }
 
     static async findUserSafeById(id) {
         const db = getDB();
+        const objectId = toObjectId(id);
+        if (!objectId) return null;
         return db.collection(USER_COLLECTION).findOne(
-            { _id: new ObjectId(id) },
+            { _id: objectId },
             { projection: { password: 0 } } // loại password
         );
     }
@@ -50,19 +54,20 @@ export default class UserDAO {
 
     static async findByIdWithPassword(id) {
         const db = getDB();
-        const userId = id.toString();
+        const objectId = toObjectId(id);
+        if (!objectId) return null;
         return db.collection(USER_COLLECTION).findOne(
-            { _id: new ObjectId(userId) },
+            { _id: objectId },
             { projection: { password: 1 } }
         );
     }
 
     static async updateUser(id, updateData) {
         const db = getDB();
-        const userId = id.toString();
-
+        const objectId = toObjectId(id);
+        if (!objectId) return null;
         const r = await db.collection(USER_COLLECTION).findOneAndUpdate(
-            { _id: new ObjectId(userId) },
+            { _id: objectId },
             { $set: { ...updateData, updatedAt: new Date() } },
             { returnDocument: 'after', projection: { password: 0 } }
         );
@@ -73,6 +78,8 @@ export default class UserDAO {
 
     static async deleteUser(id) {
         const db = getDB();
-        return db.collection(USER_COLLECTION).deleteOne({ _id: new ObjectId(id) });
+        const objectId = toObjectId(id);
+        if (!objectId) return null;
+        return db.collection(USER_COLLECTION).deleteOne({ _id: objectId });
     }
 }

@@ -6,7 +6,7 @@ export default class UserModel {
         this.fullname = fullname;
         this.email = email;
         this.password = password;
-        this.avatar = avatar;
+        this.avatar = avatar ?? process.env.DEFAULT_AVATAR_URL;
         this.role = role;
         this.createdAt = new Date();
         this.updatedAt = new Date();

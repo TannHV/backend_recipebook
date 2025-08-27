@@ -1,5 +1,5 @@
 import express from "express";
-import userController from "../controllers/user.Controller.js";
+import userController from "../controllers/user.controller.js";
 import auth from "../middlewares/auth.js";
 import roleCheck from "../middlewares/roleCheck.js";
 import { uploadAvatar } from "../middlewares/uploadImage.js";
