@@ -55,7 +55,7 @@ PORT=8080
 
 # MongoDB Atlas
 MONGO_URI=mongodb+srv://<username>:<password>@cluster0.lkqkked.mongodb.net/RecipeFoodDB?retryWrites=true&w=majority
-BD_NAME=RecipeFoodDB
+DB_NAME=RecipeFoodDB
 
 # JWT
 JWT_SECRET=your_super_secret_key_here
