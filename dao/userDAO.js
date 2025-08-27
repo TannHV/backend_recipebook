@@ -1,4 +1,4 @@
-// dao/user.dao.js
+// dao/userDao.js
 import { getDB } from '../config/db.js';
 import { ObjectId } from 'mongodb';
 import { USER_COLLECTION } from '../models/user.model.js';
