@@ -4,18 +4,27 @@ import auth from "../middlewares/auth.js";
 import roleCheck from "../middlewares/roleCheck.js";
 import { uploadAvatar } from "../middlewares/uploadImage.js";
 
+import {
+    validateRegister,
+    validateLogin,
+    validateUpdateUserInfo,
+    validateChangePassword,
+    validateIdParam,
+} from "../middlewares/validation.js";
+
+
 const router = express.Router();
 
 
 
 // Public routes
-router.post("/register", userController.register);
-router.post("/login", userController.login);
+router.post("/register", validateRegister, userController.register);
+router.post("/login", validateLogin, userController.login);
 
 // Private routes
 router.get("/profile", auth, userController.getProfile);
-router.put("/update-info", auth, userController.updateInfo);
-router.put("/change-password", auth, userController.changePassword);
+router.put("/update-info", auth, validateUpdateUserInfo, userController.updateInfo);
+router.put("/change-password", auth, validateChangePassword, userController.changePassword);
 router.put("/avatar",
     auth,
     uploadAvatar.single("avatar"),
@@ -24,9 +33,9 @@ router.put("/avatar",
 
 // Admin routes
 router.get("/", auth, roleCheck("admin"), userController.getAllUsers);
-router.get("/:id", auth, roleCheck("admin"), userController.getUserById);
-router.put("/:id/status", auth, roleCheck("admin"), userController.updateUserStatus);
-router.put("/:id/role", auth, roleCheck("admin"), userController.updateUserRole);
-router.delete("/:id", auth, roleCheck("admin"), userController.deleteUser);
+router.get("/:id", auth, roleCheck("admin"), validateIdParam("id"), userController.getUserById);
+router.put("/:id/status", auth, roleCheck("admin"), validateIdParam("id"), userController.updateUserStatus);
+router.put("/:id/role", auth, roleCheck("admin"), validateIdParam("id"), userController.updateUserRole);
+router.delete("/:id", auth, roleCheck("admin"), validateIdParam("id"), userController.deleteUser);
 
 export default router;

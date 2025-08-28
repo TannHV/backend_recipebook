@@ -1,8 +1,6 @@
 // src/config/db.js
 import { MongoClient } from 'mongodb';
-import dotenv from 'dotenv';
-
-dotenv.config();
+import { config } from './env.js';
 
 class Database {
     constructor() {
@@ -15,8 +13,8 @@ class Database {
         if (this.db) return this.db;         // đã kết nối rồi
         if (this._connecting) return this._connecting; // đang kết nối
 
-        const uri = process.env.MONGO_URI;
-        const dbName = process.env.DB_NAME;
+        const uri = config.mongoUri;
+        const dbName = config.dbName;
 
         if (!uri) throw new Error('MONGO_URI is required');
         if (!dbName) throw new Error('DB_NAME is required');

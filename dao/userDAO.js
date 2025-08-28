@@ -1,9 +1,7 @@
-// dao/user.dao.js
-import { getDB } from '../config/db.js';
-import { ObjectId } from 'mongodb';
-import { USER_COLLECTION } from '../models/user.model.js';
+// dao/userDao.js
+import { getDB } from '../config/db.js'
 import { toObjectId } from '../utils/mongo.js';
-import UserModel from '../models/user.model.js';
+import UserModel, { USER_COLLECTION } from '../models/user.model.js';
 
 export default class UserDAO {
     static async createUser(userDataRaw) {

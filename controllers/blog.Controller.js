@@ -1,15 +1,14 @@
 import BlogDAO from "../dao/blogDAO.js";
-import { sanitizeBlogContent } from "../utils/sanitizeHtml.js";
+import { sanitizeBlogContent, sanitizeCommentText } from "../utils/sanitizeHtml.js";
 import { deleteCloudinaryFile } from "../utils/cloudinaryUtils.js";
 import { AppError, catchAsync } from "../utils/error.js";
-
+import { config } from "../config/env.js";
 
 const blogController = {
     // Tạo blog mới
     createBlog: catchAsync(async (req, res, next) => {
         const { title, content } = req.body;
-
-        const thumbnail = req.file?.path || process.env.DEFAULT_BLOG_THUMBNAIL;
+        const thumbnail = req.file?.path || config.defaultBlogThumbnail;
 
         if (!title?.trim() || !content?.trim()) {
             if (req.file?.path) await deleteCloudinaryFile(req.file.path);
@@ -25,24 +24,20 @@ const blogController = {
             author: req.user._id ?? req.user.id,
         });
 
-        return res.status(201).json({
-            success: true,
-            message: "Tạo blog thành công",
-            data: newBlog,
-        });
+        return res.created(newBlog, "Tạo blog thành công");
     }),
 
     // Lấy danh sách blog
     getAllBlogs: catchAsync(async (_req, res, _next) => {
         const blogs = await BlogDAO.getAllBlogs();
-        return res.json({ success: true, data: blogs });
+        return res.success(blogs);
     }),
 
     // Lấy blog theo ID
     getBlogById: catchAsync(async (req, res, next) => {
         const blog = await BlogDAO.getBlogById(req.params.id);
         if (!blog) return next(new AppError("Không tìm thấy blog", 404));
-        res.json(blog);
+        return res.success(blog);
     }),
 
     // Cập nhật blog
@@ -66,17 +61,14 @@ const blogController = {
         };
 
         if (req.file?.path) {
-            if (
-                existingBlog.thumbnail &&
-                existingBlog.thumbnail !== process.env.DEFAULT_BLOG_THUMBNAIL
-            ) {
+            if (existingBlog.thumbnail && existingBlog.thumbnail !== config.defaultBlogThumbnail) {
                 await deleteCloudinaryFile(existingBlog.thumbnail);
             }
             updatedData.thumbnail = req.file.path;
         }
 
         const updatedBlog = await BlogDAO.updateBlog(blogId, updatedData);
-        res.json({ message: "Cập nhật blog thành công", blog: updatedBlog });
+        return res.success(updatedBlog, "Cập nhật blog thành công");
     }),
 
     // Xoá blog
@@ -85,15 +77,13 @@ const blogController = {
         const existingBlog = await BlogDAO.getBlogById(blogId);
         if (!existingBlog) return next(new AppError("Không tìm thấy blog để xoá", 404));
 
-        if (
-            existingBlog.thumbnail &&
-            existingBlog.thumbnail !== process.env.DEFAULT_BLOG_THUMBNAIL
-        ) {
+        if (existingBlog.thumbnail && existingBlog.thumbnail !== config.defaultBlogThumbnail) {
             await deleteCloudinaryFile(existingBlog.thumbnail);
         }
 
         await BlogDAO.deleteBlog(blogId);
-        res.json({ message: "Đã xoá blog" });
+        return res.success(null, "Đã xoá blog");
+        // hoặc: return res.noContent();
     }),
 
     //  Thêm comment
@@ -108,12 +98,13 @@ const blogController = {
         const blog = await BlogDAO.getBlogById(blogId);
         if (!blog) return next(new AppError("Không tìm thấy blog", 404));
 
+        const safe = sanitizeCommentText(content);
         const updatedBlog = await BlogDAO.addComment(blogId, {
             user: req.user._id ?? req.user.id,
-            content,
+            content: safe,
         });
 
-        res.json({ message: "Đã thêm bình luận", blog_comment: updatedBlog });
+        return res.created({ blog_comment: updatedBlog }, "Đã thêm bình luận");
     }),
 
     // Xoá comment khỏi blog
@@ -124,7 +115,7 @@ const blogController = {
         if (!blog) return next(new AppError("Không tìm thấy blog", 404));
 
         const updatedBlog = await BlogDAO.deleteComment(blogId, commentId);
-        res.json({ message: "Đã xoá bình luận", blog: updatedBlog });
+        return res.success({ blog: updatedBlog }, "Đã xoá bình luận");
     }),
 };
 

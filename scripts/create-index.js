@@ -4,7 +4,7 @@ import 'dotenv/config';
 (async () => {
     const client = new MongoClient(process.env.MONGO_URI);
     await client.connect();
-    const db = client.db();
+    const db = client.db(process.env.DB_NAME);
 
     await db.collection('users').createIndex({ email: 1 }, { unique: true });
     await db.collection('users').createIndex({ username: 1 }, { unique: true });

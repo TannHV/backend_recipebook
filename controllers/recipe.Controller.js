@@ -1,29 +1,29 @@
+// controllers/recipe.controller.js
 import RecipeDAO from '../dao/recipeDAO.js';
-import { sanitizeRecipeContent } from '../utils/sanitizeHtml.js';
+import { sanitizeRecipeContent, sanitizeCommentText } from '../utils/sanitizeHtml.js';
 import { deleteCloudinaryFile } from '../utils/cloudinaryUtils.js';
 import { AppError, catchAsync } from "../utils/error.js";
+import { config } from "../config/env.js";
 
+// ném AppError (400) nếu JSON string sai
 const mustParseJSON = (value, field) => {
-    if (value === undefined) return undefined;       // không gửi thì bỏ qua
-    if (Array.isArray(value)) return value;          // đã là array
-    if (typeof value !== 'string') return value;     // đã là object
+    if (value === undefined) return undefined;
+    if (Array.isArray(value)) return value;
+    if (typeof value !== 'string') return value;
     try {
         return JSON.parse(value);
-    } catch (e) {
-        const sample = field === 'ingredients'
+    } catch {
+        const eg = field === 'ingredients'
             ? `[{"name":"Gà ta","quantity":1,"unit":"kg"}]`
             : `["Bước 1","Bước 2"]`;
-        const err = new Error(`${field} phải là JSON hợp lệ. Ví dụ: ${sample}`);
-        err.status = 400;
-        throw err;
+        throw new AppError(`${field} phải là JSON hợp lệ. Ví dụ: ${eg}`, 400);
     }
 };
 
 const recipeController = {
-    // Tạo công thức mới
+    // CREATE
     create: catchAsync(async (req, res, next) => {
-        const { title, summary, content, ingredients, steps,
-            time, difficulty, servings, tags, } = req.body;
+        const { title, summary, content, ingredients, steps, time, difficulty, servings, tags } = req.body;
 
         if (!title?.trim() || !content?.trim() || !ingredients || !steps) {
             if (req.file?.path) await deleteCloudinaryFile(req.file.path);
@@ -31,7 +31,7 @@ const recipeController = {
         }
 
         const sanitized = sanitizeRecipeContent(content);
-        const thumb = req.file?.path || process.env.DEFAULT_RECIPE_THUMBNAIL;
+        const thumb = req.file?.path || config.defaultRecipeThumbnail;
 
         const recipe = await RecipeDAO.createRecipe({
             title,
@@ -47,252 +47,200 @@ const recipeController = {
             createdBy: req.user._id ?? req.user.id,
         });
 
-        return res.status(201).json({
-            success: true,
-            message: "Tạo công thức thành công",
-            data: recipe,
-        });
+        return res.created(recipe, "Tạo công thức thành công");
     }),
 
+    // LIST
+    list: catchAsync(async (req, res) => {
+        const { q, tags, difficulty, maxTotalTime, page, limit, sort } = req.query;
 
-    // Danh sách công thức
-    list: catchAsync(async (req, res, _next) => {
-        const { q, tags, difficulty, maxTotalTime, page, limit } = req.query;
-        const parsedTags =
-            typeof tags === "string"
-                ? tags
-                    .split(",")
-                    .map((s) => s.trim())
-                    .filter(Boolean)
+        const parsedTags = Array.isArray(tags)
+            ? tags
+            : (typeof tags === 'string' && tags)
+                ? tags.split(',').map(s => s.trim()).filter(Boolean)
                 : undefined;
 
         const data = await RecipeDAO.list({
-            q,
-            tags: parsedTags,
-            difficulty,
-            maxTotalTime,
-            page,
-            limit,
+            q, tags: parsedTags, difficulty, maxTotalTime, page, limit, sort,
         });
 
-        res.json(data);
+        return res.paginated(data.items, { page, limit, total: data.total });
     }),
 
-    // Lấy công thức theo ID
+    // GET BY ID
     getById: catchAsync(async (req, res, next) => {
         const r = await RecipeDAO.getById(req.params.id);
-        if (!r || r.isHidden)
-            return next(new AppError("Không tìm thấy công thức hoặc ID không hợp lệ", 404));
-        res.json(r);
+        if (!r || r.isHidden) return next(new AppError("Không tìm thấy công thức hoặc ID không hợp lệ", 404));
+        return res.success(r);
     }),
 
-    // Cập nhật
+    // UPDATE (partial)
     update: catchAsync(async (req, res, next) => {
         const id = req.params.id;
         const existing = await RecipeDAO.getById(id);
         if (!existing) return next(new AppError("Không tìm thấy công thức", 404));
 
-        const {
-            title,
-            summary,
-            content,
-            ingredients,
-            steps,
-            time,
-            difficulty,
-            servings,
-            tags,
-        } = req.body;
-
-        if (!title || !content || !ingredients || !steps) {
-            if (req.file?.path) await deleteCloudinaryFile(req.file.path);
-            return next(new AppError("Thiếu trường bắt buộc", 400));
-        }
-
-        // chỉ author hoặc admin được sửa
-        if (
-            req.user.role !== "admin" &&
-            String(existing.createdBy) !== String(req.user._id ?? req.user.id)
-        ) {
+        // chỉ author hoặc admin
+        if (req.user.role !== "admin" && String(existing.createdBy) !== String(req.user._id ?? req.user.id)) {
             return next(new AppError("Không có quyền sửa công thức này", 403));
         }
 
+        const { title, summary, content, ingredients, steps, time, difficulty, servings, tags } = req.body;
+
         const updateData = {};
-        if (title) updateData.title = title;
-        if (summary) updateData.summary = summary;
-        if (content) updateData.content = sanitizeRecipeContent(content);
-        if (time) updateData.time = time;
-        if (difficulty) updateData.difficulty = difficulty;
-        if (servings) updateData.servings = servings;
-        if (tags) updateData.tags = tags;
+        if (title !== undefined) updateData.title = title;
+        if (summary !== undefined) updateData.summary = summary;
+        if (content !== undefined) updateData.content = sanitizeRecipeContent(content);
+        if (time !== undefined) updateData.time = time;
+        if (difficulty !== undefined) updateData.difficulty = difficulty;
+        if (servings !== undefined) updateData.servings = servings;
+        if (tags !== undefined) updateData.tags = tags;
 
         const ing = mustParseJSON(ingredients, "ingredients");
         if (ing !== undefined) updateData.ingredients = ing;
-
         const st = mustParseJSON(steps, "steps");
         if (st !== undefined) updateData.steps = st;
 
         if (req.file?.path) {
-            if (
-                existing.thumbnail &&
-                existing.thumbnail !== process.env.DEFAULT_RECIPE_THUMBNAIL
-            ) {
+            if (existing.thumbnail && existing.thumbnail !== config.defaultRecipeThumbnail) {
                 await deleteCloudinaryFile(existing.thumbnail);
             }
             updateData.thumbnail = req.file.path;
         }
 
+        if (Object.keys(updateData).length === 0) {
+            return next(new AppError("Không có dữ liệu nào để cập nhật", 400));
+        }
+
         const updated = await RecipeDAO.update(id, updateData);
-        res.json({ message: "Cập nhật thành công", recipe: updated });
+        return res.success({ recipe: updated }, "Cập nhật thành công");
     }),
 
-    // Xoá công thức
+    // DELETE
     remove: catchAsync(async (req, res, next) => {
         const id = req.params.id;
         const existing = await RecipeDAO.getById(id);
         if (!existing) return next(new AppError("Không tìm thấy công thức", 404));
 
-        if (
-            req.user.role !== "admin" &&
-            String(existing.createdBy) !== String(req.user._id ?? req.user.id)
-        ) {
+        if (req.user.role !== "admin" && String(existing.createdBy) !== String(req.user._id ?? req.user.id)) {
             return next(new AppError("Không có quyền xóa công thức này", 403));
         }
 
         await RecipeDAO.delete(id);
 
-        if (
-            existing.thumbnail &&
-            existing.thumbnail !== process.env.DEFAULT_RECIPE_THUMBNAIL
-        ) {
+        if (existing.thumbnail && existing.thumbnail !== config.defaultRecipeThumbnail) {
             await deleteCloudinaryFile(existing.thumbnail);
         }
 
-        res.json({ message: "Đã xóa công thức" });
+        return res.noContent();
     }),
 
     // interactions
     toggleLike: catchAsync(async (req, res, next) => {
-        const r = await RecipeDAO.toggleLike(
-            req.params.id,
-            req.user._id ?? req.user.id
-        );
+        const r = await RecipeDAO.toggleLike(req.params.id, req.user._id ?? req.user.id);
         if (!r) return next(new AppError("Không tìm thấy công thức", 404));
 
-        return res.json({
-            message: "OK",
-            likes: r.likes?.length || 0,
-            liked: (r.likes || []).some(
-                (x) => String(x) === String(req.user._id ?? req.user.id)
-            ),
-        });
+        const likes = r.likes?.length || 0;
+        const liked = (r.likes || []).some(x => String(x) === String(req.user._id ?? req.user.id));
+        return res.success({ likes, liked }, "OK");
     }),
 
     rate: catchAsync(async (req, res, next) => {
-        const starsNum = Number(req.body.stars);
-        const comment = req.body.comment ?? "";
+        const starsNum = Number(req.body.value);
+        const comment = sanitizeCommentText(req.body.content ?? "");
+        if (!Number.isFinite(starsNum) || starsNum < 1 || starsNum > 5) {
+            return next(new AppError("Số sao 1-5", 400));
+        }
+
+        try {
+            const r = await RecipeDAO.rate(req.params.id, {
+                user: req.user._id ?? req.user.id,
+                stars: starsNum,
+                comment,
+            });
+            if (!r) return next(new AppError("Không tìm thấy công thức", 404));
+
+            const ratings = r.ratings || [];
+            const count = ratings.length;
+            const avg = count ? Number((ratings.reduce((s, x) => s + Number(x.stars || 0), 0) / count).toFixed(2)) : 0;
+            const my = ratings.find(x => String(x.user) === String(req.user._id ?? req.user.id));
+
+            return res.success(
+                { ratings, stats: { count, avg }, mine: my ? { stars: my.stars, comment: my.comment } : null },
+                "Đánh giá thành công"
+            );
+        } catch (e) {
+            if (e?.code === 'ALREADY_RATED') {
+                return next(new AppError("Bạn đã đánh giá công thức này rồi", 409));
+            }
+            throw e;
+        }
+    }),
+
+    updateRate: catchAsync(async (req, res, next) => {
+        const userId = req.user._id ?? req.user.id;
+        const starsNum = Number(req.body.value);           // FE gửi { value, content }
+        const comment = sanitizeCommentText(req.body.content ?? "");
 
         if (!Number.isFinite(starsNum) || starsNum < 1 || starsNum > 5) {
             return next(new AppError("Số sao 1-5", 400));
         }
 
-        const r = await RecipeDAO.rate(req.params.id, {
-            user: req.user._id ?? req.user.id,
-            stars: starsNum,
-            comment,
-        });
+        try {
+            const r = await RecipeDAO.updateRate(req.params.id, {
+                user: userId,
+                stars: starsNum,
+                comment,
+            });
 
-        if (!r) return next(new AppError("Không tìm thấy công thức", 404));
+            if (!r) return next(new AppError("Không tìm thấy công thức", 404));
 
-        const ratings = r.ratings || [];
-        const count = ratings.length;
-        const avg = count
-            ? Number(
-                (
-                    ratings.reduce((s, x) => s + Number(x.stars || 0), 0) / count
-                ).toFixed(2)
-            )
-            : 0;
-        const my = ratings.find(
-            (x) => String(x.user) === String(req.user._id ?? req.user.id)
-        );
+            const ratings = r.ratings || [];
+            const count = ratings.length;
+            const avg = count
+                ? Number((ratings.reduce((s, x) => s + Number(x.stars || 0), 0) / count).toFixed(2))
+                : 0;
+            const mine = ratings.find(x => String(x.user) === String(userId));
 
-        return res.json({
-            message: "Đánh giá thành công",
-            ratings,
-            stats: { count, avg },
-            mine: my ? { stars: my.stars, comment: my.comment } : null,
-        });
+            return res.success(
+                { ratings, stats: { count, avg }, mine: mine ? { stars: mine.stars, comment: mine.comment } : null },
+                "Cập nhật đánh giá thành công"
+            );
+        } catch (e) {
+            if (e?.code === 'RATING_NOT_FOUND') {
+                return next(new AppError("Bạn chưa đánh giá công thức này", 404));
+            }
+            throw e;
+        }
     }),
 
     userDeleteRating: catchAsync(async (req, res, next) => {
-        const r = await RecipeDAO.deleteRating(
-            req.params.id,
-            req.user._id ?? req.user.id,
-            req.user
-        );
-        if (!r)
-            return next(
-                new AppError(
-                    "Không tìm thấy công thức hoặc không có rating để xóa",
-                    404
-                )
-            );
+        const r = await RecipeDAO.deleteRating(req.params.id, req.user._id ?? req.user.id, req.user);
+        if (!r) return next(new AppError("Không tìm thấy công thức hoặc không có rating để xóa", 404));
 
         const ratings = r.ratings || [];
         const count = ratings.length;
-        const avg = count
-            ? Number(
-                (
-                    ratings.reduce((s, x) => s + Number(x.stars || 0), 0) / count
-                ).toFixed(2)
-            )
-            : 0;
+        const avg = count ? Number((ratings.reduce((s, x) => s + Number(x.stars || 0), 0) / count).toFixed(2)) : 0;
 
-        return res.json({
-            message: "Đã xóa đánh giá",
-            ratings,
-            stats: { count, avg },
-        });
+        return res.success({ ratings, stats: { count, avg } }, "Đã xóa đánh giá");
     }),
 
     deleteUserRating: catchAsync(async (req, res, next) => {
-        if (req.user.role !== "admin") {
-            return next(new AppError("Chỉ admin được xóa rating của người khác", 403));
-        }
-        const targetUserId = req.params.userId;
-        const r = await RecipeDAO.deleteRating(
-            req.params.id,
-            targetUserId,
-            req.user
-        );
-        if (!r)
-            return next(
-                new AppError("Không tìm thấy công thức hoặc rating cần xóa", 404)
-            );
+        if (req.user.role !== "admin") return next(new AppError("Chỉ admin được xóa rating của người khác", 403));
+
+        const r = await RecipeDAO.deleteRating(req.params.id, req.params.userId, req.user);
+        if (!r) return next(new AppError("Không tìm thấy công thức hoặc rating cần xóa", 404));
 
         const ratings = r.ratings || [];
         const count = ratings.length;
-        const avg = count
-            ? Number(
-                (
-                    ratings.reduce((s, x) => s + Number(x.stars || 0), 0) / count
-                ).toFixed(2)
-            )
-            : 0;
+        const avg = count ? Number((ratings.reduce((s, x) => s + Number(x.stars || 0), 0) / count).toFixed(2)) : 0;
 
-        return res.json({
-            message: "Đã xóa đánh giá",
-            ratings,
-            stats: { count, avg },
-        });
+        return res.success({ ratings, stats: { count, avg } }, "Đã xóa đánh giá");
     }),
 
     addComment: catchAsync(async (req, res, next) => {
-        const { content } = req.body;
-        if (!content || !content.trim()) {
-            return next(new AppError("Nội dung bình luận không được trống", 400));
-        }
+        const content = sanitizeCommentText(req.body.content ?? "");
+        if (!content.trim()) return next(new AppError("Nội dung bình luận không được trống", 400));
 
         const r = await RecipeDAO.addComment(req.params.id, {
             user: req.user._id ?? req.user.id,
@@ -300,30 +248,25 @@ const recipeController = {
         });
         if (!r) return next(new AppError("Không tìm thấy công thức", 404));
 
-        res.json({ message: "Đã thêm bình luận", comments: r });
+        return res.created({ comments: r }, "Đã thêm bình luận");
     }),
 
     userDeleteComment: catchAsync(async (req, res, next) => {
         const { id, commentId } = req.params;
 
         const recipe = await RecipeDAO.getById(id);
+
         if (!recipe) return next(new AppError("Không tìm thấy công thức", 404));
 
-        const target = (recipe.comments || []).find(
-            (c) => String(c._id) === String(commentId)
-        );
+        const target = (recipe.comments || []).find(c => String(c._id) === String(commentId));
         if (!target) return next(new AppError("Không tìm thấy bình luận", 404));
 
-        // chỉ chính chủ hoặc admin
-        if (
-            req.user.role !== "admin" &&
-            String(target.user) !== String(req.user._id ?? req.user.id)
-        ) {
+        if (req.user.role !== "admin" && String(target.user) !== String(req.user._id ?? req.user.id)) {
             return next(new AppError("Không có quyền xóa bình luận này", 403));
         }
 
         const r = await RecipeDAO.deleteComment(id, commentId);
-        res.json({ message: "Đã xóa bình luận", comments: r.comments });
+        return res.success({ comments: r.comments }, "Đã xóa bình luận");
     }),
 
     deleteComment: catchAsync(async (req, res, next) => {
@@ -332,29 +275,25 @@ const recipeController = {
         const recipe = await RecipeDAO.getById(id);
         if (!recipe) return next(new AppError("Không tìm thấy công thức", 404));
 
-        // chỉ admin hoặc chủ recipe
-        if (
-            req.user.role !== "admin" &&
-            String(recipe.createdBy) !== String(req.user._id ?? req.user.id)
-        ) {
+        if (req.user.role !== "admin" && String(recipe.createdBy) !== String(req.user._id ?? req.user.id)) {
             return next(new AppError("Không có quyền xóa bình luận này", 403));
         }
 
         const r = await RecipeDAO.deleteComment(id, commentId);
-        res.json({ message: "Đã xóa bình luận", comments: r.comments });
+        return res.success({ comments: r.comments }, "Đã xóa bình luận");
     }),
 
-    // moderation (admin)
+    // moderation
     hide: catchAsync(async (req, res, next) => {
         const r = await RecipeDAO.hide(req.params.id, true);
         if (!r) return next(new AppError("Không tìm thấy công thức", 404));
-        res.json({ message: "Đã ẩn công thức", recipe_status: r.isHidden });
+        return res.success({ recipe_status: r.isHidden }, "Đã ẩn công thức");
     }),
 
     unhide: catchAsync(async (req, res, next) => {
         const r = await RecipeDAO.hide(req.params.id, false);
         if (!r) return next(new AppError("Không tìm thấy công thức", 404));
-        res.json({ message: "Đã bỏ ẩn công thức", recipe_status: r.isHidden });
+        return res.success({ recipe_status: r.isHidden }, "Đã bỏ ẩn công thức");
     }),
 };
 

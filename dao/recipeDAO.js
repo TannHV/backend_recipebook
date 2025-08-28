@@ -3,6 +3,7 @@ import { ObjectId } from 'mongodb';
 import { getDB } from '../config/db.js';
 import { toObjectId } from '../utils/mongo.js';
 import RecipeModel, { RECIPE_COLLECTION } from '../models/recipe.model.js';
+import { escapeRegex } from '../utils/escapeRegex.js';
 
 export default class RecipeDAO {
     static async createRecipe(data) {
@@ -19,15 +20,18 @@ export default class RecipeDAO {
         return db.collection(RECIPE_COLLECTION).findOne({ _id: objectId });
     }
 
-    static async list({ q, tags, difficulty, isHidden = false, maxTotalTime, page = 1, limit = 12 }) {
+    static async list({ q, tags, difficulty, isHidden = false, maxTotalTime, page = 1, limit = 12, sort }) {
         const db = getDB();
         const filter = { isHidden };
 
-        if (q) {
+        if (q && q.trim()) {
+            const safe = escapeRegex(q.trim());
+            const flexible = safe.replace(/\s+/g, '.*'); // "pho bo" -> /pho.*bo/i
+            const rx = new RegExp(flexible, 'i');       // case-insensitive
             filter.$or = [
-                { title: { $regex: q, $options: 'i' } },
-                { summary: { $regex: q, $options: 'i' } },
-                { 'ingredients.name': { $regex: q, $options: 'i' } },
+                { title: rx },
+                // { summary: rx },
+                { 'ingredients.name': rx },
             ];
         }
         if (Array.isArray(tags) && tags.length) filter.tags = { $in: tags };
@@ -35,7 +39,11 @@ export default class RecipeDAO {
         if (maxTotalTime) filter['time.total'] = { $lte: Number(maxTotalTime) };
 
         const skip = (Number(page) - 1) * Number(limit);
-        const cursor = db.collection(RECIPE_COLLECTION).find(filter, { projection: { content: 0, ingredients: 0, steps: 0 } }).sort({ createdAt: -1 });
+        const cursor = db
+            .collection(RECIPE_COLLECTION)
+            .find(filter, { projection: { content: 0, ingredients: 0, steps: 0 } })
+            .sort(sort || { createdAt: -1 });
+
         const [items, total] = await Promise.all([
             cursor.skip(skip).limit(Number(limit)).toArray(),
             db.collection(RECIPE_COLLECTION).countDocuments(filter),
@@ -143,6 +151,27 @@ export default class RecipeDAO {
 
         const doc = pushNew?.value ?? await db.collection(RECIPE_COLLECTION).findOne({ _id: objectId });
         return doc ?? null;
+    }
+
+
+    static async updateRate(recipeId, { user, stars, comment }) {
+        const db = getDB();
+        const _id = new ObjectId(String(recipeId));
+        const uid = new ObjectId(String(user));
+
+        const now = new Date();
+        const upd = await db.collection('recipes').updateOne(
+            { _id, 'ratings.user': uid },
+            { $set: { 'ratings.$.stars': Number(stars), 'ratings.$.comment': comment, 'ratings.$.updatedAt': now } }
+        );
+
+        if (upd.matchedCount === 0) {
+            const e = new Error('RATING_NOT_FOUND');
+            e.code = 'RATING_NOT_FOUND';
+            throw e;
+        }
+
+        return db.collection('recipes').findOne({ _id }, { projection: { ratings: 1 } });
     }
 
     static async deleteRating(id, userIdToDelete) {

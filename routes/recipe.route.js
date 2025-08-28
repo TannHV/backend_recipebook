@@ -4,29 +4,40 @@ import auth from '../middlewares/auth.js';
 import roleCheck from '../middlewares/roleCheck.js';
 import { uploadThumbnailImage } from "../middlewares/uploadImage.js";
 
+import {
+    validateCreateRecipe,
+    validateUpdateRecipe,
+    validateComment,
+    validateRating,
+    validateRecipeListQuery,
+    validateIdParam,
+    validateTwoIds,
+} from "../middlewares/validation.js";
+import { sanitizeRecipeFields, sanitizeCommentField } from '../middlewares/xss.js';
 
 const router = express.Router();
 
 // public
-router.get('/', recipeController.list);
-router.get('/:id', recipeController.getById);
+router.get('/', validateRecipeListQuery, recipeController.list);
+router.get('/:id', validateIdParam("id"), recipeController.getById);
 
 // private (author)
-router.post('/', auth, uploadThumbnailImage.single('thumbnail'), recipeController.create);
-router.put('/:id', auth, uploadThumbnailImage.single('thumbnail'), recipeController.update);
-router.delete('/:id', auth, recipeController.remove);
+router.post('/', auth, uploadThumbnailImage.single('thumbnail'), validateCreateRecipe, sanitizeRecipeFields(['title', 'summary', 'content']), recipeController.create);
+router.put('/:id', auth, validateIdParam("id"), uploadThumbnailImage.single('thumbnail'), validateUpdateRecipe, recipeController.update);
+router.delete('/:id', auth, validateIdParam("id"), recipeController.remove);
 
 // interactions
-router.post('/:id/like', auth, recipeController.toggleLike);
-router.post('/:id/rate', auth, recipeController.rate);
-router.delete('/:id/rating', auth, recipeController.userDeleteRating);
-router.post('/:id/comments', auth, recipeController.addComment);
-router.delete('/:id/comments/:commentId', auth, recipeController.userDeleteComment);
+router.post('/:id/like', auth, validateIdParam("id"), recipeController.toggleLike);
+router.post('/:id/rate', auth, validateIdParam("id"), validateRating, recipeController.rate);
+router.put('/:id/rating', auth, validateIdParam('id'), validateRating, recipeController.updateRate)
+router.delete('/:id/rating', auth, validateIdParam("id"), recipeController.userDeleteRating);
+router.post('/:id/comments', auth, validateIdParam("id"), validateComment, sanitizeCommentField('content'), recipeController.addComment);
+router.delete('/:id/comments/:commentId', auth, validateTwoIds("id", "commentId"), recipeController.userDeleteComment);
 
 // admin moderation
-router.patch('/:id/hide', auth, roleCheck('admin'), recipeController.hide);
-router.patch('/:id/unhide', auth, roleCheck('admin'), recipeController.unhide);
-router.delete('/:id/rating/:userId', auth, roleCheck('admin'), recipeController.deleteUserRating);
-router.delete('/:id/comments/:commentId/admin', auth, roleCheck('admin'), recipeController.deleteComment);
+router.patch('/:id/hide', auth, roleCheck('admin'), validateIdParam("id"), recipeController.hide);
+router.patch('/:id/unhide', auth, roleCheck('admin'), validateIdParam("id"), recipeController.unhide);
+router.delete('/:id/rating/:userId', auth, roleCheck('admin'), validateTwoIds("id", "userId"), recipeController.deleteUserRating);
+router.delete('/:id/comments/:commentId/admin', auth, roleCheck('admin'), validateTwoIds("id", "commentId"), recipeController.deleteComment);
 
 export default router;

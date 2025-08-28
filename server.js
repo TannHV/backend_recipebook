@@ -4,25 +4,20 @@ dotenv.config();
 
 import app from './app.js';
 import { connectDB, closeDB } from './config/db.js';
+import { config } from './config/env.js';
 
-const PORT = process.env.PORT || 3000;
-let httpServer; // giữ tham chiếu để đóng khi shutdown
+let httpServer;
 
 (async () => {
     try {
-        // 1) Kết nối DB trước
-        await connectDB();
+        // 1) Kết nối DB (dùng config.mongoUri, config.dbName)
+        await connectDB(config.mongoUri, config.dbName);
         console.log('DB connected. Starting HTTP server...');
 
-        // 2) Khởi động HTTP server
-        httpServer = app.listen(PORT, () => {
-            console.log(`Server running at http://localhost:${PORT}`);
+        // 2) Khởi động HTTP server (dùng config.port)
+        httpServer = app.listen(config.port, () => {
+            console.log(`Server running in ${config.nodeEnv} mode at http://localhost:${config.port}`);
         });
-
-        // (Tuỳ) Đặt timeout/keep-alive nếu cần:
-        // httpServer.keepAliveTimeout = 65000;
-        // httpServer.headersTimeout = 66000;
-
     } catch (err) {
         console.error('Failed to start server:', err);
         process.exit(1);
