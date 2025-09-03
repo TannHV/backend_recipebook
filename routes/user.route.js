@@ -15,12 +15,6 @@ import {
 
 const router = express.Router();
 
-
-
-// Public routes
-router.post("/register", validateRegister, userController.register);
-router.post("/login", validateLogin, userController.login);
-
 // Private routes
 router.get("/profile", auth, userController.getProfile);
 router.put("/update-info", auth, validateUpdateUserInfo, userController.updateInfo);

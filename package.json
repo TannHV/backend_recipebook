@@ -22,6 +22,7 @@
     "cloudinary": "^1.41.3",
     "compression": "^1.8.1",
     "cors": "^2.8.5",
+    "crypto": "^1.0.1",
     "dotenv": "^17.2.0",
     "express": "^5.1.0",
     "express-mongo-sanitize": "^2.2.0",
@@ -34,6 +35,7 @@
     "morgan": "^1.10.1",
     "multer": "^2.0.2",
     "multer-storage-cloudinary": "^4.0.0",
+    "nodemailer": "^7.0.6",
     "sanitize-html": "^2.17.0"
   },
   "devDependencies": {

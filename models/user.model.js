@@ -11,5 +11,36 @@ export default class UserModel {
         this.createdAt = new Date();
         this.updatedAt = new Date();
         this.status = 'active';
+
+        // Trạng thái xác thực email
+        this.emailVerified = false;
+
+        // =============== HYBRID VERIFY (TOKEN + OTP) ===============
+        this.emailVerification = {
+            // TOKEN mode
+            tokenHash: null,         
+            tokenExpiresAt: null,     
+
+            // OTP mode
+            codeHash: null,          
+            codeExpiresAt: null,     
+            codeAttempts: 0,          
+            codeLastSentAt: null
+        };
+
+        // =============== HYBRID RESET PASSWORD (TOKEN + OTP) ===============
+        this.passwordReset = {
+            // TOKEN mode
+            tokenHash: null,
+            tokenExpiresAt: null,
+
+            // OTP mode
+            codeHash: null,
+            codeExpiresAt: null,
+            codeAttempts: 0,
+            codeLastSentAt: null
+        };
+
+        this.lastEmailChangedAt = null;
     }
 }

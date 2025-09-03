@@ -68,7 +68,7 @@ export default class BlogDAO {
             createdAt: new Date()
         };
 
-        const { value } = await db.collection(BLOG_COLLECTION).findOneAndUpdate(
+        await db.collection(BLOG_COLLECTION).findOneAndUpdate(
             { _id: objectId },
             { $push: { comments: newComment } },
             { returnDocument: 'after' }
@@ -83,18 +83,19 @@ export default class BlogDAO {
         const commentObjectId = toObjectId(commentId);
         if (!objectId || !commentObjectId) return null;
 
-        const { value } = await db.collection(BLOG_COLLECTION).findOneAndUpdate(
+        await db.collection(BLOG_COLLECTION).findOneAndUpdate(
             { _id: objectId },
             { $pull: { comments: { _id: commentObjectId } } },
             { returnDocument: 'after' }
         );
-        const result = await db
-            .collection(BLOG_COLLECTION)
-            .findOne(
-                { _id: objectId },
-                { projection: { comment_count: { $size: "$comments" }, comments: 1, _id: 0 } }
-            );
-        return result;
+
+        const blog = await db.collection(BLOG_COLLECTION).findOne(
+            { _id: objectId },
+            { projection: { comments: 1, _id: 0 } }
+        );
+
+        const comments = blog?.comments ?? [];
+        return { comments, comment_count: comments.length };
     }
 };
 

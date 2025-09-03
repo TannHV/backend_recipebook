@@ -49,4 +49,5 @@ export default function globalErrorHandler(err, req, res, _next) {
         error.isOperational ? statusCode : 500,
         { code, ...(error.isOperational && error.details ? { details: error.details } : {}) }
     );
+
 }

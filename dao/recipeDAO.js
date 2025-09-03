@@ -200,7 +200,7 @@ export default class RecipeDAO {
 
         const objectId = toObjectId(id);
         const userObjectId = toObjectId(user);
-        if (!userObjectId) return null;
+        if (!objectId || !userObjectId) return null;
 
         const comment = {
             _id: new ObjectId(),

@@ -8,9 +8,11 @@ import { randomUUID } from 'crypto';
 import { rateLimit } from 'express-rate-limit';
 import hpp from 'hpp';
 
+import authRoute from './routes/auth.route.js';
 import userRoutes from './routes/user.route.js';
 import blogRoutes from './routes/blog.route.js';
 import recipeRoutes from './routes/recipe.route.js';
+
 
 // mới: error helpers
 import globalErrorHandler from './middlewares/errorHandler.js';
@@ -118,12 +120,17 @@ app.get('/ready', (_req, res) => {
 
 /* -------------------------------- Routes -------------------------------- */
 // Lưu ý: áp limiter TRƯỚC khi mount userRoutes để /login|/register được bảo vệ
-app.use('/api/users/login', authLimiter);
-app.use('/api/users/register', authLimiter);
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/register', authLimiter);
 
+app.use('/api/auth', authRoute);
 app.use('/api/users', userRoutes);
 app.use('/api/blogs', blogRoutes);
 app.use('/api/recipes', recipeRoutes);
+
+// // Debugging route email
+// import debugRoute from "./routes/debug.route.js";
+// app.use("/debug", debugRoute);
 
 /* ---------------------------------- 404 --------------------------------- */
 app.use((req, _res, next) => {

@@ -3,101 +3,11 @@ import UserDAO from "../dao/userDAO.js";
 import { validateEmail } from "../utils/validateEmail.js";
 import { validatePasswordStrength } from "../utils/passwordUtils.js";
 import { deleteCloudinaryFile } from "../utils/cloudinaryUtils.js";
-import { generateToken } from "../config/jwt.js";
+import { sendEmailChangedNotice } from "../services/email.service.js";
 import { AppError, catchAsync } from "../utils/error.js";
 import { config } from "../config/env.js";
 
 const userController = {
-    // Đăng ký tài khoản
-    register: catchAsync(async (req, res, next) => {
-        console.log(req.body);
-        const { username, email, password, fullname } = req.body;
-
-        if (!username || !email || !password || !fullname) {
-            return next(new AppError("Vui lòng điền đầy đủ thông tin bắt buộc", 400));
-        }
-
-        const existingUserName = await UserDAO.findUserByUsername(username);
-        if (existingUserName) {
-            return next(new AppError("Username đã được sử dụng", 400));
-        }
-
-        if (!validateEmail(email)) {
-            return next(new AppError("Email không hợp lệ", 400));
-        }
-
-        const existingUser = await UserDAO.findUserByEmail(email);
-        if (existingUser) {
-            return next(new AppError("Email đã được sử dụng", 400));
-        }
-
-        if (!validatePasswordStrength(password)) {
-            return next(new AppError("Mật khẩu phải tối thiểu 8 ký tự, có chữ hoa, chữ thường và số", 400));
-        }
-
-        const hashedPassword = await bcrypt.hash(password, 10);
-
-        const newUser = await UserDAO.createUser({
-            username,
-            email,
-            password: hashedPassword,
-            fullname,
-            avatar: config.defaultAvatarUrl,
-        });
-
-        const token = generateToken({ id: newUser._id, role: newUser.role });
-
-        return res.created({
-            token,
-            user: {
-                id: newUser._id,
-                username: newUser.username,
-                email: newUser.email,
-                fullname: newUser.fullname,
-            },
-        }, "Đăng ký thành công");
-    }),
-
-    // Đăng nhập
-    login: catchAsync(async (req, res, next) => {
-        const { identifier, password } = req.body;
-
-        if (!identifier || !password) {
-            return next(new AppError("Vui lòng điền đầy đủ thông tin", 400));
-        }
-
-        const user = await UserDAO.findByEmailOrUsername({
-            email: identifier,
-            username: identifier,
-        });
-
-        if (!user) {
-            return next(new AppError("Tài khoản không tồn tại", 404));
-        }
-
-        const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) {
-            return next(new AppError("Mật khẩu không đúng", 400));
-        }
-
-        if (user.status === "blocked") {
-            return next(new AppError("Tài khoản của bạn đã bị khóa", 403));
-        }
-
-        const token = generateToken({ id: user._id, role: user.role });
-
-        return res.success({
-            token,
-            user: {
-                id: user._id,
-                username: user.username,
-                email: user.email,
-                avatar: user.avatar,
-                fullname: user.fullname,
-                role: user.role,
-            },
-        }, "Đăng nhập thành công");
-    }),
 
     // Xem thông tin cá nhân
     getProfile: catchAsync(async (req, res, next) => {
@@ -121,29 +31,47 @@ const userController = {
         if (!email || !fullname) {
             return next(new AppError("Email và họ tên là thông tin bắt buộc", 400));
         }
-
         if (!validateEmail(email)) {
             return next(new AppError("Email không hợp lệ", 400));
         }
 
-        if (email) {
-            const existing = await UserDAO.findUserByEmail(email);
-            if (existing && String(existing._id) !== String(req.user._id ?? req.user.id)) {
-                return next(new AppError("Email đã được sử dụng bởi tài khoản khác", 400));
-            }
+        const userId = req.user?._id ?? req.user?.id;
+        const current = await UserDAO.findUserById(userId);
+        if (!current) return next(new AppError("Không tìm thấy người dùng", 404));
+
+        // Nếu email không đổi -> chỉ update fullname
+        if (email.trim().toLowerCase() === String(current.email).trim().toLowerCase()) {
+            const updated = await UserDAO.updateUser(userId, {
+                fullname,
+                updatedAt: Date.now(),
+            });
+            if (!updated) return next(new AppError("Không thể cập nhật thông tin", 500));
+            return res.success({ user: updated }, "Cập nhật thông tin thành công");
         }
 
-        const userId = req.user?._id ?? req.user?.id;
+        // Email thay đổi: check trùng
+        const existing = await UserDAO.findUserByEmail(email);
+        if (existing && String(existing._id) !== String(userId)) {
+            return next(new AppError("Email đã được sử dụng bởi tài khoản khác", 400));
+        }
 
-        const updated = await UserDAO.updateUser(userId, {
-            email,
-            fullname,
-            updatedAt: Date.now(),
-        });
+        const updated = await UserDAO.markEmailUnverifiedAndUpdate(userId, email);
+        if (!updated) return next(new AppError("Không thể cập nhật email", 500));
 
-        if (!updated) return next(new AppError("Không tìm thấy người dùng", 404));
+        // 2) Gửi thông báo về email cũ (không chặn luồng nếu gửi thất bại)
+        const oldEmail = current.email;
+        if (oldEmail) {
+            await sendEmailChangedNotice({
+                to: oldEmail,
+                username: current.username ?? "",
+                newEmail: email,
+            }).catch(() => { }); // best-effort
+        }
 
-        return res.success({ user: updated }, "Cập nhật thông tin thành công");
+        return res.success(
+            { user: updated },
+            "Cập nhật thông tin thành công. Email mới cần xác thực trước khi dùng một số tính năng."
+        );
     }),
 
     // Upload avatar
@@ -244,6 +172,8 @@ const userController = {
         return res.success(null, "Xóa người dùng thành công");
         // hoặc: return res.noContent();
     }),
+
+
 };
 
 export default userController;

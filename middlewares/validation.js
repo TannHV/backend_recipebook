@@ -89,10 +89,9 @@ export const validateRegister = validate(Joi.object({
             'any.only': 'Mật khẩu xác nhận không khớp',
             'any.required': 'Xác nhận mật khẩu là bắt buộc',
         }),
-    fullname: Joi.string().min(2).max(100).required()
+    fullname: Joi.string().min(2).max(100).default("Anonymous")
         .messages({
             'string.min': 'Họ tên phải có ít nhất 2 ký tự',
-            'any.required': 'Họ tên là bắt buộc',
         }),
 }));
 

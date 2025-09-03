@@ -31,7 +31,7 @@ router.put("/:id", auth, roleCheck("admin"),
     uploadBlogImage.single("thumbnail"),
     validateUpdateBlog,
     blogController.updateBlog);
-router.delete("/:id", auth, roleCheck("admin"), validateTwoIds("id"), blogController.deleteBlog);
+router.delete("/:id", auth, roleCheck("admin"), validateIdParam("id"), blogController.deleteBlog);
 
 // Comment
 router.post("/:id/comment", auth,
