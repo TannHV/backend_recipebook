@@ -3,6 +3,7 @@ import { ObjectId } from 'mongodb';
 import { getDB } from '../config/db.js';
 import { toObjectId } from '../utils/mongo.js';
 import BlogModel, { BLOG_COLLECTION } from '../models/blog.model.js';
+import { escapeRegex } from '../utils/escapeRegex.js';
 
 export default class BlogDAO {
     // Tạo blog mới

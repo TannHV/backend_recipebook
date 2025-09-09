@@ -13,9 +13,9 @@ const userController = {
     getProfile: catchAsync(async (req, res, next) => {
         const user = await UserDAO.findUserById(req.user._id ?? req.user.id);
         if (!user) return next(new AppError("Người dùng không tồn tại", 404));
-
+        console.log(user);
         return res.success({
-            id: user.id,
+            id: user._id,
             username: user.username,
             email: user.email,
             avatar: user.avatar,

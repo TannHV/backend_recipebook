@@ -23,12 +23,19 @@ export class ApiResponse {
 
     static paginated(res, items, pagination, message = 'Success') {
         const { page, limit, total } = pagination;
-        const totalPages = Math.ceil(total / Math.max(1, limit));
-        const meta = {
-            page, limit, totalItems: total, totalPages,
-            hasNext: page < totalPages, hasPrev: page > 1
+        const body = {
+            success: true,
+            message,
+            data: {
+                items,
+                total,
+                page: Number(page),
+                limit: Number(limit),
+            },
+            timestamp: new Date().toISOString(),
+            ...(res.req?.id ? { requestId: res.req.id } : {}),
         };
-        return ApiResponse.success(res, items, message, 200, meta);
+        return res.status(200).json(body);
     }
 
     // Thêm code + details

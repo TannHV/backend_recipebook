@@ -29,6 +29,36 @@ const recipeController = {
             if (req.file?.path) await deleteCloudinaryFile(req.file.path);
             return next(new AppError("Thiếu trường bắt buộc", 400));
         }
+        // dùng mustParseJSON có sẵn cho mảng; thêm normalize cho time/tags
+        const ing = mustParseJSON(ingredients, "ingredients");
+        const st = mustParseJSON(steps, "steps");
+        const tg = mustParseJSON(tags, "tags");
+        const normalizeTime = (v) => {
+            if (v === undefined) return undefined;
+            if (typeof v === 'string') {
+                const num = Number(v);
+                if (Number.isFinite(num)) return { prep: 0, cook: num, total: num };
+                try {
+                    const obj = JSON.parse(v);
+                    if (obj && typeof obj === 'object') {
+                        const prep = Number(obj.prep ?? 0) || 0;
+                        const cook = Number(obj.cook ?? obj.total ?? 0) || 0;
+                        const total = Number(obj.total ?? prep + cook) || 0;
+                        return { prep, cook, total };
+                    }
+                } catch (_) { }
+                return { prep: 0, cook: 0, total: 0 };
+            }
+            if (typeof v === 'number') return { prep: 0, cook: v, total: v };
+            if (v && typeof v === 'object') {
+                const prep = Number(v.prep ?? 0) || 0;
+                const cook = Number(v.cook ?? v.total ?? 0) || 0;
+                const total = Number(v.total ?? prep + cook) || 0;
+                return { prep, cook, total };
+            }
+            return { prep: 0, cook: 0, total: 0 };
+        };
+        const t = normalizeTime(time);
 
         const sanitized = sanitizeRecipeContent(content);
         const thumb = req.file?.path || config.defaultRecipeThumbnail;
@@ -37,17 +67,17 @@ const recipeController = {
             title,
             summary,
             content: sanitized,
-            ingredients,
-            steps,
-            time,
+            ingredients: ing,
+            steps: st,
+            time: t,
             difficulty,
             servings,
-            tags,
+            tags: tg,
             thumbnail: thumb,
             createdBy: req.user._id ?? req.user.id,
         });
-
-        return res.created(recipe, "Tạo công thức thành công");
+        const full = await RecipeDAO.getByIdWithUsers(String(recipe._id));
+        return res.created(full || recipe, "Tạo công thức thành công");
     }),
 
     // LIST
@@ -60,7 +90,7 @@ const recipeController = {
                 ? tags.split(',').map(s => s.trim()).filter(Boolean)
                 : undefined;
 
-        const data = await RecipeDAO.list({
+        const data = await RecipeDAO.listWithAuthor({
             q, tags: parsedTags, difficulty, maxTotalTime, page, limit, sort,
         });
 
@@ -69,7 +99,7 @@ const recipeController = {
 
     // GET BY ID
     getById: catchAsync(async (req, res, next) => {
-        const r = await RecipeDAO.getById(req.params.id);
+        const r = await RecipeDAO.getByIdWithUsers(req.params.id);
         if (!r || r.isHidden) return next(new AppError("Không tìm thấy công thức hoặc ID không hợp lệ", 404));
         return res.success(r);
     }),
@@ -294,6 +324,18 @@ const recipeController = {
         const r = await RecipeDAO.hide(req.params.id, false);
         if (!r) return next(new AppError("Không tìm thấy công thức", 404));
         return res.success({ recipe_status: r.isHidden }, "Đã bỏ ẩn công thức");
+    }),
+
+    getByUser: catchAsync(async (req, res, next) => {
+        const { userId } = req.params;
+        const page = Number(req.query.page ?? 1) || 1;
+        const limit = Number(req.query.limit ?? 12) || 12;
+        const sort = String(req.query.sort ?? "newest"); // newest|oldest
+
+        if (!userId) return next(new AppError("Thiếu userId", 400));
+
+        const data = await RecipeDAO.listByAuthor(userId, { page, limit, sort });
+        return res.success(data);
     }),
 };
 

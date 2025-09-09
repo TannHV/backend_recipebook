@@ -18,6 +18,7 @@ import { sanitizeRecipeFields, sanitizeCommentField } from '../middlewares/xss.j
 const router = express.Router();
 
 // public
+router.get("/users/:userId/", recipeController.getByUser);
 router.get('/', validateRecipeListQuery, recipeController.list);
 router.get('/:id', validateIdParam("id"), recipeController.getById);
 

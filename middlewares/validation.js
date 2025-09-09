@@ -149,12 +149,47 @@ const recipeBase = {
         .custom(parseJsonIfString)
         .messages({ 'any.invalid': 'Trường steps phải là mảng JSON hợp lệ' }),
 
-    time: Joi.object({
-        prep: Joi.number().min(0).optional(),
-        cook: Joi.number().min(0).optional(),
-        total: Joi.number().min(0).optional(),
-    }).optional(),
-
+    time: Joi.alternatives()
+        .try(
+            Joi.object({
+                prep: Joi.number().min(0).optional(),
+                cook: Joi.number().min(0).optional(),
+                total: Joi.number().min(0).optional(),
+            }),
+            Joi.number().min(0),   // cho phép gửi số phút
+            Joi.string()           // hoặc string (JSON hoặc "12")
+        )
+        .custom((value, helpers) => {
+            // string -> thử parse JSON, nếu là "12" thì xem như số 12
+            if (typeof value === 'string') {
+                const num = Number(value);
+                if (Number.isFinite(num)) return { prep: 0, cook: num, total: num };
+                try {
+                    const obj = JSON.parse(value);
+                    if (obj && typeof obj === 'object') {
+                        const prep = Number(obj.prep ?? 0) || 0;
+                        const cook = Number(obj.cook ?? obj.total ?? 0) || 0;
+                        const total = Number(obj.total ?? prep + cook) || 0;
+                        return { prep, cook, total };
+                    }
+                } catch (_) { /* fallthrough */ }
+                return helpers.error('any.invalid');
+            }
+            // number -> wrap thành object
+            if (typeof value === 'number') {
+                return { prep: 0, cook: value, total: value };
+            }
+            // object -> normalize lại đề phòng thiếu field
+            if (value && typeof value === 'object') {
+                const prep = Number(value.prep ?? 0) || 0;
+                const cook = Number(value.cook ?? value.total ?? 0) || 0;
+                const total = Number(value.total ?? prep + cook) || 0;
+                return { prep, cook, total };
+            }
+            return helpers.error('any.invalid');
+        })
+        .messages({ 'any.invalid': 'Trường time phải là số phút, hoặc JSON/đối tượng hợp lệ' })
+        .optional(),
     difficulty: Joi.string().valid('Dễ', 'Trung bình', 'Khó').optional(),
     servings: Joi.number().positive().optional(),
 
@@ -197,7 +232,7 @@ export const validateUpdateRecipe = validate(Joi.object({
 
 // Rating & Comment tái sử dụng chung
 export const validateRating = validate(Joi.object({
-    value: Joi.number().integer().min(1).max(5).required(), 
+    value: Joi.number().integer().min(1).max(5).required(),
     content: Joi.string().min(1).required()
 }));
 
