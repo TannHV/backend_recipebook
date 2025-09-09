@@ -5,8 +5,6 @@ import roleCheck from "../middlewares/roleCheck.js";
 import { uploadAvatar } from "../middlewares/uploadImage.js";
 
 import {
-    validateRegister,
-    validateLogin,
     validateUpdateUserInfo,
     validateChangePassword,
     validateIdParam,

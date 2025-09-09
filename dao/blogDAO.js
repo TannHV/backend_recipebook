@@ -14,6 +14,36 @@ export default class BlogDAO {
     }
 
     // Lấy tất cả blogs (sort theo mới nhất)
+    static async getBlogs({ q, sort } = {}) {
+        const db = getDB();
+
+        // Build filter for search
+        const filter = {};
+        if (q && String(q).trim()) {
+            const rx = new RegExp(escapeRegex(q), 'i');
+            filter.$or = [
+                { title: rx },
+                { content: rx },
+            ];
+        }
+
+        // Build sort mapping
+        const sortKey = String(sort || 'newest').toLowerCase();
+        let sortStage = { createdAt: -1 };
+        if (sortKey === 'oldest') sortStage = { createdAt: 1 };
+        else if (sortKey === 'title_az') sortStage = { title: 1 };
+        else if (sortKey === 'title_za') sortStage = { title: -1 };
+        else if (sortKey === 'most_commented') sortStage = { comment_count: -1, createdAt: -1 };
+
+        const pipeline = [
+            { $match: filter },
+            { $addFields: { comment_count: { $size: { $ifNull: ["$comments", []] } } } },
+            { $sort: sortStage },
+        ];
+
+        return db.collection(BLOG_COLLECTION).aggregate(pipeline).toArray();
+    }
+
     static async getAllBlogs() {
         const db = getDB();
         return db.collection(BLOG_COLLECTION)

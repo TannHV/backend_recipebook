@@ -28,8 +28,9 @@ const blogController = {
     }),
 
     // Lấy danh sách blog
-    getAllBlogs: catchAsync(async (_req, res, _next) => {
-        const blogs = await BlogDAO.getAllBlogs();
+    getAllBlogs: catchAsync(async (req, res, _next) => {
+        const { q, sort } = req.query || {};
+        const blogs = await BlogDAO.getBlogs({ q, sort });
         return res.success(blogs);
     }),
 

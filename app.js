@@ -44,7 +44,7 @@ app.use(helmet());
 // app.use(helmet.crossOriginResourcePolicy({ policy: 'cross-origin' }));
 
 /* --------------------------------- CORS -------------------------------- */
-const allowList = config.corsOrigins; // mảng domain từ env.js
+const allowList = config.corsOrigins;
 const corsOptions = {
     origin: allowList.length
         ? (origin, cb) => {
