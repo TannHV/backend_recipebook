@@ -91,7 +91,7 @@ NODE_ENV=development
 PORT=8080
 
 # MongoDB
-MONGO_URI=mongodb+srv://username:password@cluster0.mongodb.net/RecipeFoodDB?retryWrites=true&w=majority
+MONGO_URI==mongodb+srv://<username>:<password>@cluster0.lkqkked.mongodb.net
 DB_NAME=RecipeFoodDB
 
 # JWT
