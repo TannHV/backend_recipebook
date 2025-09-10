@@ -24,7 +24,7 @@ const envSchema = Joi.object({
 
     // SMTP
     EMAIL_SERVICE: Joi.string().valid('gmail', 'smtp').default('gmail'),
-    SMTP_HOST: Joi.string().valid('smtp.gmail.com').default('smtp.gmail.com'),
+    SMTP_HOST: Joi.string().default('smtp.gmail.com'),
     SMTP_PORT: Joi.number().positive().default(465),
     SMTP_USER: Joi.string().required(),
     SMTP_PASS: Joi.string().required(),
