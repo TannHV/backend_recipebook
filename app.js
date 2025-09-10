@@ -14,7 +14,7 @@ import blogRoutes from './routes/blog.route.js';
 import recipeRoutes from './routes/recipe.route.js';
 
 
-// mới: error helpers
+// error helpers
 import globalErrorHandler from './middlewares/errorHandler.js';
 import { attachResponseHelpers } from './utils/apiResponse.js';
 import { AppError } from './utils/error.js';
