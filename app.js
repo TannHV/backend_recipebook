@@ -40,8 +40,6 @@ app.use(morgan(':method :url :status :res[content-length] - :response-time ms re
 
 // Security headers
 app.use(helmet());
-// Nếu cần ảnh cross-origin:
-// app.use(helmet.crossOriginResourcePolicy({ policy: 'cross-origin' }));
 
 /* --------------------------------- CORS -------------------------------- */
 const allowList = config.corsOrigins;
@@ -63,7 +61,6 @@ app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 /* ---------- NoSQL injection sanitize (tương thích Express 5) ------------ */
-/** Thay cho express-mongo-sanitize: KHÔNG gán lại req.query, chỉ mutate key bên trong object */
 const sanitizeKeysDeep = (obj) => {
     if (!obj || typeof obj !== 'object') return;
     for (const key of Object.keys(obj)) {
@@ -119,7 +116,6 @@ app.get('/ready', (_req, res) => {
 });
 
 /* -------------------------------- Routes -------------------------------- */
-// Lưu ý: áp limiter TRƯỚC khi mount userRoutes để /login|/register được bảo vệ
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
 
