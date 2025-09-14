@@ -82,7 +82,7 @@ const recipeController = {
 
     // LIST
     list: catchAsync(async (req, res) => {
-        const { q, tags, difficulty, maxTotalTime, page, limit, sort } = req.query;
+        const { q, tags, difficulty, maxTotalTime, page, limit, sort, isHidden } = req.query;
 
         const parsedTags = Array.isArray(tags)
             ? tags
@@ -91,7 +91,7 @@ const recipeController = {
                 : undefined;
 
         const data = await RecipeDAO.listWithAuthor({
-            q, tags: parsedTags, difficulty, maxTotalTime, page, limit, sort,
+            q, tags: parsedTags, isHidden: Boolean(isHidden), difficulty, maxTotalTime, page, limit, sort
         });
 
         return res.paginated(data.items, { page, limit, total: data.total });

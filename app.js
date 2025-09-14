@@ -50,7 +50,7 @@ const corsOptions = {
             if (allowList.includes(origin)) return cb(null, true);
             return cb(new Error('Not allowed by CORS'));
         }
-        : true, // dev: mở tất cả nếu chưa set
+        : true,
     credentials: true,
 };
 app.use(cors(corsOptions));
